@@ -1,86 +1,60 @@
 #!/bin/bash
 
-# TODO
-#   1. exit if file isn't saved or edited
-#   2. teach mk_temps to run only on command
-#      instead of looping over all args
-#       - intent: if a dir already exists, we
-#                 can avoid making temps by just
-#                 moving the src contents to the
-#                 dest
+
 
 
 mmv()
 {
     if test $# -gt 0
     then
-
         # init vars
-        declare -a out_names_arr
-        declare -A name_dict
+        declare -A new_name_dict
 
+        get_input "$@"
 
-        open_editor "$@"
+        # move through keys and determine
+        # correct course of action
+        for old_name in "${!new_name_dict[@]}"
+        do
+            # get output name
+            local dest="${new_name_dict[${old_name}]}"
 
-        mk_temps "$@"
-
-        create_paths
-
-        mv_temp_files
+            # function to handle dirs
+            if [[ -n $dest ]]
+            then
+                conduct_mv $old_name $dest
+            fi
+        done
     fi
 }
 
 
 
 
-# create any needed dirs
-create_paths()
+# Does:
+#   1. creates temp file to edit in
+#      Note: I avoid /tmp, though I'd
+#            prefer it, so that I can
+#            avoid sudo during
+#            deletion at the end
+#   2. opens file
+#   3. cleans input
+#   4. collects user input from file
+#      into array
+#   5. deletes temp file
+get_input()
 {
-    # loop through vals of name_dict
-    for name in "${name_dict[@]}"
-    do
-        # get path from absolute full path
-        local dir=$(dirname ${name})
-
-        # if desired path does not exist
-        if test ! -d $dir
-        then
-            mkdir -p $dir
-        fi
-    done
-}
-
-
-
-
-# open editor and populate out_names_arr
-# with content from file
-open_editor()
-{
-    # create temp file
-    #Note: I avoid /tmp, though I'd
-    #      prefer it, so that I can
-    #      avoid sudo during
-    #      deletion at the end
-
     # create temp file to write in
-    temp_file=$(mktemp ~/.cache/mmv-XXXXX)
+    local temp_file=$(mktemp ~/.cache/mmv-XXXXX)
 
     # echo all arg names into temp file
     printf "%s\n" "$@" > $temp_file
 
     $EDITOR $temp_file
 
-    # remove trailing slashes
-    sed -i 's.\/$..' $temp_file
+    clean_input $temp_file
 
-    sed -i "s.~.${HOME}." $temp_file
-
-    # remove all \n, put lines back
-    echo "$(awk NF $temp_file)" > $temp_file
-
-    # read contents into arr
-    readarray -t out_names_arr < "$temp_file"
+    create_name_dict "$temp_file" "$@"
 
     # delete temp editing file
     rm -f $temp_file 1> /dev/null
@@ -89,55 +63,143 @@ open_editor()
 
 
 
-# TODO
+# Does:
+#   1. expands any tildes into
+#      the absolute path of $HOME
+#   2. removes empty lines
+clean_input()
+{
+    # expand tildes
+    sed -i "s.~.${HOME}." $1
 
-# name_dict is populated with key, val pairs
-# where the key is the temp name and the val
-# is the name we desire
-mk_temps()
+    # remove all newline chars
+    echo "$(awk NF $1)" > $1
+}
+
+
+
+
+# Does:
+#   1. creates array from user input
+#      in file
+#   2. loops through old names given
+#      as CLI args
+#       a. if old name does not match
+#          the new name given as input
+#           i. expand the path of the old
+#              name
+#           ii. assign old name as key, new
+#               name as val in dict
+create_name_dict()
 {
     local i=0
+    local -a out_names_arr
+    local in_file=$1
 
-    # for all files that we want to change, create
-    # a temp location and move the item of interest
-    # to it. Then, use the temp file name as a key for
-    # the value that we want to change it to
-    for old_name in $@
+    # read contents into arr
+    readarray -t out_names_arr < "$in_file"
+
+    # loop through original names in arg list
+    for old_name in ${@:2}
     do
-        # create temp name using dry run
-        #   - easier than creating random str
-        local tmp_dest=$(mktemp -u XXXXXXX_"$old_name")
+        # expand old name to abs path
+        local dest=${out_names_arr[$i]}
 
-        # rename current arg to temp file
-        mv "$old_name" "$tmp_dest"
+        # compare old to new to determine
+        # if we want to keep
+        if [[ $old_name != $dest ]]
+        then
 
-        # key = temp name, val = new name
-        name_dict["$tmp_dest"]="${out_names_arr[$i]}"
+            local expand_old=$(readlink -f $old_name)
+
+            # create associative array where
+            # key = old name, val = new name
+            new_name_dict[$expand_old]=$dest
+        fi
+
+        i=$((i+1))
     done
 }
 
 
 
 
-# mv temp files to files
-# of desired name
-mv_temp_files()
+conduct_mv()
 {
-    # loop through keys in name_dict
-    for temp_name in "${!name_dict[@]}"
-    do
-        # get output name
-        local dest="${name_dict[${temp_name}]}"
+    local old=$1
+    local new=$2
 
 
-        if test -d $dest
+    # if new dir already exists
+    if test -d $new
+    then
+        printf "Moving contents of ${old} to ${new}"
+
+        mv ${old}* $new
+
+    # if file already exists
+    elif test -f $new
+    then
+        # check if dest is in queue
+        if [[ -n ${new_name_dict[${old}]} ]]
         then
-            mv ${temp_name}* $dest
-            rm -r ${temp_name}
+            new_name_dict=("${new_name_dict}/${new}")
 
+            swap $old $new
+
+        # else
         else
-            mv "$temp_name" "$dest"
-
+            warn
         fi
-    done
+
+    else
+        # make new dir and parents, mv
+        create_path $new; mv $old $new
+    fi
+}
+
+
+
+
+
+swap()
+{
+    # alias args
+    local old=$1
+    local new=$2
+
+    # create temp file
+    local tmp_space=$(mktemp -u mmv_XXXXXXX)
+
+    # swap
+    mv $old $tmp_space && mv $new $old && mv $tmp_space $new
+}
+
+
+
+
+# create any needed dirs
+create_path()
+{
+    local dir=$1
+
+    # get path from absolute full path
+    local path=$(dirname ${dir})
+
+    # if desired path does not exist
+    if test ! -d $path
+    then
+        mkdir -p $path
+    fi
+}
+
+
+
+
+warn()
+{
+    local path=$(readlink -f ${new})
+
+    printf "\n\n\tCannot move \"${old}\" to \"${path}\"."
+    printf "\n\t\"${path}\" is an existing file...\n"
 }
