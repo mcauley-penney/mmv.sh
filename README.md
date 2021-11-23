@@ -1,8 +1,8 @@
 
 # mmv
 Allows you to rename files interactively using `$EDITOR`. Inspired by [itchyny/mmv](https://github.com/itchyny/mmv).
+![mmv_basic_change](https://user-images.githubusercontent.com/59481467/143089045-19c01b41-f682-4391-a90f-faad99439a78.gif)
 
-![mmv](https://user-images.githubusercontent.com/59481467/142784385-12043470-8c38-4370-bbe6-458302e050b3.gif)
 
 
 
@@ -28,7 +28,13 @@ This implementation of mmv can:
 
 - [X] swap file names
 
+![mmv_swap](https://user-images.githubusercontent.com/59481467/143089095-6bee9a87-185d-4e87-8af5-e40dbd7b2742.gif)
+
+
 - [X] appropriately nest items
+
+![nesting](https://user-images.githubusercontent.com/59481467/143089178-05fe9d18-aed8-4370-ab75-d5da95974680.gif)
+
 
 
 
@@ -51,3 +57,4 @@ printf "\n# source mmv\n. ~/.config/mmv/mmv.sh\n" >> ~/.bashrc
 
 ## TODO
 - swap dir names
+- swap file names "backwards", see Issue #2
