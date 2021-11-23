@@ -22,4 +22,4 @@ printf "\n# source mmv\n. ~/.config/mmv/mmv.sh\n" >> ~/.bashrc
 
 
 ## TODO
-  - [ ] automatically create dirs, if needed
+    - only create temp files on demand

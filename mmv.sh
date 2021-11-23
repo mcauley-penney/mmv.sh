@@ -1,26 +1,30 @@
 #!/bin/bash
 
+# TODO
+#   1. exit if file isn't saved or edited
+#   2. teach mk_temps to run only on command
+#      instead of looping over all args
+#       - intent: if a dir already exists, we
+#                 can avoid making temps by just
+#                 moving the src contents to the
+#                 dest
+
 
 mmv()
 {
-    # Process:
-    #   arg -> temp var -> chosen name
-
-
-    # if len of args > 0
     if test $# -gt 0
     then
+
         # init vars
         declare -a out_names_arr
         declare -A name_dict
 
-        # get new names from user
+
         open_editor "$@"
 
-        # declare -p out_names_arr
-        # printf "\n"
+        mk_temps "$@"
 
-        mk_name_dict "$@"
+        create_paths
 
         mv_temp_files
     fi
@@ -29,6 +33,28 @@ mmv()
 
 
 
+# create any needed dirs
+create_paths()
+{
+    # loop through vals of name_dict
+    for name in "${name_dict[@]}"
+    do
+        # get path from absolute full path
+        local dir=$(dirname ${name})
+
+        # if desired path does not exist
+        if test ! -d $dir
+        then
+            mkdir -p $dir
+        fi
+    done
+}
+
+
+
+
+# open editor and populate out_names_arr
+# with content from file
 open_editor()
 {
     # create temp file
@@ -36,12 +62,19 @@ open_editor()
     #      prefer it, so that I can
     #      avoid sudo during
     #      deletion at the end
+
+    # create temp file to write in
     temp_file=$(mktemp ~/.cache/mmv-XXXXX)
 
     # echo all arg names into temp file
     printf "%s\n" "$@" > $temp_file
 
     $EDITOR $temp_file
+
+    # remove trailing slashes
+    sed -i 's.\/$..' $temp_file
+
+    sed -i "s.~.${HOME}." $temp_file
 
     # remove all \n, put lines back
     echo "$(awk NF $temp_file)" > $temp_file
@@ -56,7 +89,12 @@ open_editor()
 
 
 
-mk_name_dict()
+# TODO
+
+# name_dict is populated with key, val pairs
+# where the key is the temp name and the val
+# is the name we desire
+mk_temps()
 {
     local i=0
 
@@ -66,17 +104,8 @@ mk_name_dict()
     # the value that we want to change it to
     for old_name in $@
     do
-        local dest="${out_names_arr[$i]}"
-
-        local dir_to_mk=$([[ "$dest" == *\/* ]] && echo $(dirname $dest) || echo '.')
-
-        mkdir -p $dir_to_mk
-
-        # create temp to get random name
+        # create temp name using dry run
         #   - easier than creating random str
-        #
-        # delete first so that, if src is
-        # dir, dir won't be nested
         local tmp_dest=$(mktemp -u XXXXXXX_"$old_name")
 
         # rename current arg to temp file
@@ -84,21 +113,31 @@ mk_name_dict()
 
         # key = temp name, val = new name
         name_dict["$tmp_dest"]="${out_names_arr[$i]}"
-
-
-        i=$((i+1))
     done
 }
 
 
 
 
+# mv temp files to files
+# of desired name
 mv_temp_files()
 {
-    # for every key in dictionary
+    # loop through keys in name_dict
     for temp_name in "${!name_dict[@]}"
     do
-        # change key/temp name to val/desired names
-        mv "$temp_name" "${name_dict[${temp_name}]}"
+        # get output name
+        local dest="${name_dict[${temp_name}]}"
+
+
+        if test -d $dest
+        then
+            mv ${temp_name}* $dest
+            rm -r ${temp_name}
+
+        else
+            mv "$temp_name" "$dest"
+
+        fi
     done
 }
