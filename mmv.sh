@@ -12,19 +12,9 @@ mmv()
 
         get_input "$@"
 
-        # move through keys and determine
-        # correct course of action
-        for old_name in "${!new_name_dict[@]}"
-        do
-            # get output name
-            local dest="${new_name_dict[${old_name}]}"
+        conduct_init_renames
 
-            # function to handle dirs
-            if [[ -n $dest ]]
-            then
-                conduct_mv $old_name $dest
-            fi
-        done
+        conduct_mvs
     fi
 }
 
@@ -124,55 +114,94 @@ create_name_dict()
 
 
 
-conduct_mv()
+conduct_mvs()
 {
-    local old=$1
-    local new=$2
+    for old_name in "${!new_name_dict[@]}"
+    do
+        local dest=${new_name_dict[${old_name}]}
 
-
-    # if new dir already exists
-    if test -d $new
-    then
-        printf "Moving contents of ${old} to ${new}"
-
-        mv ${old}* $new
-
-    # if file already exists
-    elif test -f $new
-    then
-        # check if dest is in queue
-        if [[ -n ${new_name_dict[${old}]} ]]
+        if [[ -n $dest ]]
         then
-            new_name_dict=("${new_name_dict}/${new}")
-
-            swap $old $new
-
-        # else
-        else
-            warn
+            create_path $dest; mv $old_name $dest
         fi
+    done
+}
 
-    else
-        # make new dir and parents, mv
-        create_path $new; mv $old $new
+
+
+
+conduct_init_renames()
+{
+    # change all names that conflict
+    for old_name in "${!new_name_dict[@]}"
+    do
+        local dest=${new_name_dict[${old_name}]}
+
+        if test -d $dest
+        then
+            # move all old contents
+            #
+            # TODO works but check for internal
+            # renames, i.e. make sure you don't
+            # overwrite file names that are the same
+            #
+            # may require changing structure for checking
+            # if items already exist
+            mv ${old_name}/* $dest
+
+            # remove dir
+            rm -r ${old_name}
+
+            # nullify in dict
+            new_name_dict[$old_name]=""
+
+        # if file already exists
+        elif test -f $dest
+        then
+            # rename file with dest name to temp name
+            rename_file $dest
+        fi
+    done
+}
+
+
+
+
+consult_queue_for_conflicts()
+{
+    local name_to_check=$1
+    local tmp_name=$2
+
+    local mv_name_dest=${new_name_dict[${name_to_check}]}
+
+    printf "Checking $name_to_check: dest=$mv_name_dest\n"
+
+    # if the file that existed was in the queue to be moved
+    if [[ -n $mv_name_dest ]]
+    then
+        # nullify old entry
+        new_name_dict[$name_to_check]=""
+
+        # create new entry with tmp name as key
+        new_name_dict+=( [$tmp_name]=$mv_name_dest )
     fi
 }
 
 
 
 
-
-swap()
+rename_file()
 {
     # alias args
-    local old=$1
-    local new=$2
+    local name_to_mv=$(readlink -f $1)
 
     # create temp file
-    local tmp_space=$(mktemp -u mmv_XXXXXXX)
+    local tmp_name=$(mktemp -u mmv_XXXXX_$(basename $name_to_mv))
 
-    # swap
-    mv $old $tmp_space && mv $new $old && mv $tmp_space $new
+    mv $name_to_mv $tmp_name
+
+    # check if name that was moved is inside of queue
+    consult_queue_for_conflicts $name_to_mv $tmp_name
 }
 
 
@@ -191,15 +220,4 @@ create_path()
     then
         mkdir -p $path
     fi
-}
-
-
-
-
-warn()
-{
-    local path=$(readlink -f ${new})
-
-    printf "\n\n\tCannot move \"${old}\" to \"${path}\"."
-    printf "\n\t\"${path}\" is an existing file...\n"
 }

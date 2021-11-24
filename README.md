@@ -51,10 +51,3 @@ printf "\n# source mmv\n. ~/.config/mmv/mmv.sh\n" >> ~/.bashrc
 
 ## requirements
 - `bash 4.0` or greater for associative array support
-
-
-
-
-## TODO
-- swap dir names
-- swap file names "backwards", see Issue #2
