@@ -1,18 +1,15 @@
 #!/bin/bash
 
 
-
-
 mmv()
 {
     if test $# -gt 0
     then
-        # init vars
         declare -A new_name_dict
 
         get_input "$@"
 
-        conduct_init_renames
+        conduct_renames
 
         conduct_mvs
     fi
@@ -122,7 +119,7 @@ conduct_mvs()
 
         if [[ -n $dest ]]
         then
-            create_path $dest; mv $old_name $dest
+            mkdir -p $(dirname ${dest}); mv $old_name $dest
         fi
     done
 }
@@ -130,7 +127,7 @@ conduct_mvs()
 
 
 
-conduct_init_renames()
+conduct_renames()
 {
     # change all names that conflict
     for old_name in "${!new_name_dict[@]}"
@@ -139,52 +136,24 @@ conduct_init_renames()
 
         if test -d $dest
         then
-            # move all old contents
-            #
-            # TODO works but check for internal
-            # renames, i.e. make sure you don't
-            # overwrite file names that are the same
-            #
-            # may require changing structure for checking
-            # if items already exist
+
+            # move all content from old dir into destination
+            # WARNING: will overwrite dir contents!
+            #          can change mv flags to protect them
             mv ${old_name}/* $dest
 
             # remove dir
-            rm -r ${old_name}
+            rm --preserve-root -r ${old_name} >> /dev/null
 
             # nullify in dict
             new_name_dict[$old_name]=""
 
-        # if file already exists
+        # if file already exists rename file with dest name to temp name
         elif test -f $dest
         then
-            # rename file with dest name to temp name
             rename_file $dest
         fi
     done
-}
-
-
-
-
-consult_queue_for_conflicts()
-{
-    local name_to_check=$1
-    local tmp_name=$2
-
-    local mv_name_dest=${new_name_dict[${name_to_check}]}
-
-    printf "Checking $name_to_check: dest=$mv_name_dest\n"
-
-    # if the file that existed was in the queue to be moved
-    if [[ -n $mv_name_dest ]]
-    then
-        # nullify old entry
-        new_name_dict[$name_to_check]=""
-
-        # create new entry with tmp name as key
-        new_name_dict+=( [$tmp_name]=$mv_name_dest )
-    fi
 }
 
 
@@ -200,24 +169,16 @@ rename_file()
 
     mv $name_to_mv $tmp_name
 
-    # check if name that was moved is inside of queue
-    consult_queue_for_conflicts $name_to_mv $tmp_name
-}
+    local mv_name_dest=${new_name_dict[${name_to_mv}]}
 
-
-
-
-# create any needed dirs
-create_path()
-{
-    local dir=$1
-
-    # get path from absolute full path
-    local path=$(dirname ${dir})
-
-    # if desired path does not exist
-    if test ! -d $path
+    # if destination exists
+    if [[ -n $mv_name_dest ]]
     then
-        mkdir -p $path
+        # nullify old entry
+        new_name_dict[$name_to_mv]=""
+
+        # create new entry with tmp name as key
+        new_name_dict+=( [$tmp_name]=$mv_name_dest )
     fi
+
 }
