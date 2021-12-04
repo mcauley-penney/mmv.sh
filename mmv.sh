@@ -32,19 +32,20 @@ mmv()
 get_input()
 {
     # create temp file to write in
-    local temp_file=$(mktemp ~/.cache/mmv-XXXXX)
+    local temp_file
+    temp_file=$(mktemp ~/.cache/mmv-XXXXX)
 
     # echo all arg names into temp file
-    printf "%s\n" "$@" > $temp_file
+    printf "%s\n" "$@" > "$temp_file"
 
-    $EDITOR $temp_file
+    $EDITOR "$temp_file"
 
-    clean_input $temp_file
+    clean_input "$temp_file"
 
     create_name_dict "$temp_file" "$@"
 
     # delete temp editing file
-    rm -f $temp_file 1> /dev/null
+    rm -f "$temp_file "1> /dev/null
 }
 
 
@@ -56,11 +57,18 @@ get_input()
 #   2. removes empty lines
 clean_input()
 {
+    local in_file=$1
+    local temp_file
+    temp_file=$(mktemp ~/.cache/mmv-XXXXX)
+
     # expand tildes
-    sed -i "s.~.${HOME}." $1
+    sed -i "s.~.${HOME}." "$in_file"
 
     # remove all newline chars
-    echo "$(awk NF $1)" > $1
+    "$(awk NF "$in_file")" > "$temp_file"
+
+    # write to arg file
+    mv "$temp_file" "$in_file"
 }
 
 
@@ -87,17 +95,18 @@ create_name_dict()
     readarray -t out_names_arr < "$in_file"
 
     # loop through original names in arg list
-    for old_name in ${@:2}
+    for old_name in "${@:2}"
     do
         # expand old name to abs path
         local dest=${out_names_arr[$i]}
 
         # compare old to new to determine
         # if we want to keep
-        if [[ $old_name != $dest ]]
+        if [[ $old_name != "$dest" ]]
         then
 
-            local expand_old=$(readlink -f $old_name)
+            local expand_old
+            expand_old=$(readlink -f "$old_name")
 
             # create associative array where
             # key = old name, val = new name
@@ -119,7 +128,7 @@ conduct_mvs()
 
         if [[ -n $dest ]]
         then
-            mkdir -p $(dirname ${dest}); mv $old_name $dest
+            mkdir -p "$(dirname "${dest}")"; mv "$old_name" "$dest"
         fi
     done
 }
@@ -134,24 +143,24 @@ conduct_renames()
     do
         local dest=${new_name_dict[${old_name}]}
 
-        if test -d $dest
+        if test -d "$dest"
         then
 
             # move all content from old dir into destination
             # WARNING: will overwrite dir contents!
             #          can change mv flags to protect them
-            mv ${old_name}/* $dest
+            mv "${old_name}/*" "$dest"
 
             # remove dir
-            rm --preserve-root -r ${old_name} >> /dev/null
+            rm --preserve-root -r "${old_name}" >> /dev/null
 
             # nullify in dict
             new_name_dict[$old_name]=""
 
         # if file already exists rename file with dest name to temp name
-        elif test -f $dest
+        elif test -f "$dest"
         then
-            rename_file $dest
+            rename_file "$dest"
         fi
     done
 }
@@ -162,12 +171,14 @@ conduct_renames()
 rename_file()
 {
     # alias args
-    local name_to_mv=$(readlink -f $1)
+    local name_to_mv
+    name_to_mv=$(readlink -f "$1")
 
     # create temp file
-    local tmp_name=$(mktemp -u mmv_XXXXX_$(basename $name_to_mv))
+    local tmp_name
+    tmp_name=$(mktemp -u mmv_XXXXX_"$(basename "$name_to_mv")")
 
-    mv $name_to_mv $tmp_name
+    mv "$name_to_mv" "$tmp_name"
 
     local mv_name_dest=${new_name_dict[${name_to_mv}]}
 
