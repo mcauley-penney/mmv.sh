@@ -65,7 +65,7 @@ get_input()
 
     # delete temp file which was used
     # to gather new name args
-    rm -f "$temp_file "1> /dev/null
+    rm -f "$temp_file" 1> /dev/null
 }
 
 
@@ -98,7 +98,7 @@ clean_input()
     # all vals, such as old names and
     # new names "line up" by index and
     # write to temp file
-    "$(awk NF "$in_file")" > "$temp_file"
+    awk NF "$in_file" > "$temp_file"
 
     # write temp file to out parameter
     mv "$temp_file" "$in_file"
@@ -229,13 +229,23 @@ conduct_renames()
 ################################################################################
 rename_file()
 {
-    # get full path of $1
     local name_to_mv
+    local to_mv_base
+    local to_mv_dir
+
+    # full path of $1
     name_to_mv=$(readlink -f "$1")
 
+    # name of $1
+    to_mv_base=$(basename "$name_to_mv")
+
+    # path of $1 without name
+    to_mv_dir=$(dirname "$name_to_mv")
+
     # create temp file
-    local tmp_name
-    tmp_name=$(mktemp -u mmv_XXXXX_"$(basename "$name_to_mv")")
+    tmp_name=$(mktemp -u "${to_mv_dir}"/mmv_XXXXX_"${to_mv_base}")
+
+    echo "${tmp_name}"
 
     # mv arg item to temp name
     mv "$name_to_mv" "$tmp_name"
